@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
 
 import * as logger from './logger'
-import fetch from './fetcher'
+import fetchCmd from './fetcher'
+import newTemplateCmd from './templateCreation'
 
 export function activate(context: vscode.ExtensionContext) {
 	logger.init()
 
-	let disposable = vscode.commands.registerCommand('templatefetcher.fetch', fetch);
+	context.subscriptions.push(
+		vscode.commands.registerCommand('templatefetcher.fetch', fetchCmd)
+	);
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(
+		vscode.commands.registerCommand('templatefetcher.newTemplate', newTemplateCmd)
+	);
 }

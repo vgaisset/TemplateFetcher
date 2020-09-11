@@ -15,7 +15,6 @@ export class Logger {
     
     log(msg: string) {
         channel.appendLine(`[Template Fetcher] ${this.prefix} ${msg}`)
-        channel.show()
     }
     
     info(msg: string) {
@@ -28,6 +27,10 @@ export class Logger {
     
     error(msg: string) {
         this.log(`Error: ${msg}`)
+    }
+
+    takeFocus() {
+        channel.show(false)
     }
 }
 

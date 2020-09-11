@@ -6,25 +6,7 @@ import * as path from 'path'
 import * as ncp from 'ncp'
 
 import { Logger } from './logger'
-
-interface TemplateConfig {
-    /**
-     * Template location. It can be an absolute path or an URL.
-     */
-    uri: string,
-    /**
-     * If the template is a directory, how many leading directories must be discarded ?
-     * If the value is 0, then the directory is copied.
-     * If the value is 1, then only the directory **content** is copied.
-     */
-    directoryDepth: number,
-    /**
-     * Specify if the file is an archive or not.
-     * If so, content will be extracted.
-     * **directoryDepth** also applies on archives.
-     */
-    isArchive: boolean
-}
+import * as config from './config'
 
 enum TemplateType {
     /**
@@ -44,103 +26,87 @@ enum TemplateType {
     ARCHIVE,
 }
 
-const logger = new Logger()
+const logger = new Logger('[Fetcher]')
 
-export default function fetch(target: vscode.Uri) {
-    const config = getConfig()
+/**
+ * Fetch command.
+ * It asks to user the template to fetch and then fetchs it.
+ * @param target Where to fetch the template in
+ */
+export default async function fetchCmd(target: vscode.Uri): Promise<void> {
+    if(target === undefined) {
+        const workspacesFolder = vscode.workspace.workspaceFolders
 
-    if(config.size === 0) {
-        vscode.window.showErrorMessage('There are no templates defined', 'Open settings (UI)', 'Open settings (JSON)').then(value => {
-            if(value === 'Open settings (UI)') {
-                vscode.commands.executeCommand( 'workbench.action.openSettings', 'Template Fetcher' );
-            } else if(value === 'Open settings (JSON)') {
-                vscode.commands.executeCommand( 'workbench.action.openSettingsJson', 'Template Fetcher');
+        if(workspacesFolder) {
+            target = workspacesFolder[0].uri
+        } else {
+            await vscode.window.showErrorMessage('No target directory is provided and there is no open workspace')
+            return new Promise((ok, _) => { ok() })
+        }
+        logger.warning(`No target directory is specified, going to use '${target.fsPath}' instead`)
+    }
+
+    const templatesInfo = config.getTemplatesInfo()
+
+    if(templatesInfo.size === 0) {
+        vscode.window.showErrorMessage('There are no templates defined', 'New template').then(value => {
+            if(value === 'New template') {
+                vscode.commands.executeCommand('templatefetcher.newTemplate')
             }
         })
-        return
+        return new Promise((ok, _) => { ok() })
     }
 
-    const templateNames = Array.from(config.keys())
+    const templateNames = Array.from(templatesInfo.keys())
+    const templateName = await vscode.window.showQuickPick(templateNames, {placeHolder: 'Select the template to fetch'})
 
-    vscode.window.showQuickPick(templateNames).then(
-        templateName => {
-            if(templateName) {
-                const templateInfo = config.get(templateName) as TemplateConfig
-                
-                if(checkAndCleanConfigItem(templateName, templateInfo)) {
-                    logger.info(`Init project using rule "${templateName}"`)
-                    logger.info(`Fetching template from "${templateInfo.uri}"`)
-                    
-                    try {
-                        const templateType = findTemplateUriType(templateName, templateInfo)
-
-                        if(templateType == TemplateType.DIRECTORY) {
-                            fetchFromDirectory(templateInfo, target)
-                        } else {
-                            fetchFromFile(templateInfo, target)
-                        }
-                    } catch(err) {
-                        logger.error(err.message)
-                    }
-    
-                    return
-                }
-            }
+    if(templateName) {
+        const templateInfo = templatesInfo.get(templateName) as config.TemplateInfo
+        
+        if(config.checkAndCleanTemplateInfo(templateInfo)) {
+            logger.info(`Using template "${templateName}"`)
+            logger.info(`Fetching from "${templateInfo.uri}"`)
             
-            vscode.window.showErrorMessage('Template creation cancelled')
-        }, 
-        failureReason => {
-            vscode.window.showErrorMessage(failureReason)
-        }
-    )
-}
+            try {
+                const templateType = findTemplateUriType(templateName, templateInfo)
 
-/**
- * Retrieves different templates informations written in user config file.
- */
-function getConfig(): Map<string, TemplateConfig> {
-    let map = new Map<string, TemplateConfig>()
+                if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
+                    templateInfo.directoryDepth = await confirmDirectoryDepth(templateInfo.directoryDepth)
+                    logger.takeFocus()
+                }
+                if(templateType == TemplateType.DIRECTORY) {
+                    fetchFromDirectory(templateInfo, target)
+                } else {
+                    fetchFromFile(templateInfo, target)
+                }
+            } catch(err) {
+                logger.error(err.message)
+                logger.takeFocus()
+            }
 
-    const config = vscode.workspace.getConfiguration('Templates')
-    const templatesObj = config.get('Info') as any
-
-    for(const templateName in templatesObj) {
-        map.set(templateName, templatesObj[templateName])
-    }
-
-    return map
-}
-
-/**
- * Checks validity of the different template parameters.
- * If some parameters are omitted, then default values are affected.
- * @param templateName
- * @param templateInfo 
- */
-function checkAndCleanConfigItem(templateName: string, templateInfo: TemplateConfig): boolean {
-    if(templateInfo.uri === undefined) {
-        logConfigError(templateName, 'uri', 'URI field is mandatory in order to fetch project template')
-        return false
-    }
-    if(templateInfo.uri.trim().length === 0) {
-        logConfigError(templateName, 'uri', 'An URI can not be empty')
-        return false
-    }
-
-    if(templateInfo.directoryDepth === undefined) {
-        templateInfo.directoryDepth = 0
-    } else {
-        if(templateInfo.directoryDepth < 0) {
-            logConfigError(templateName, 'directoryDepth', 'The directory depth can not have a negative value')
-            return false
+            return new Promise((ok, _) => { ok() })
         }
     }
+    
+    vscode.window.showErrorMessage('Template fetching cancelled')
+    return new Promise((ok, _) => { ok() })
+}
 
-    if(templateInfo.isArchive === undefined) {
-        templateInfo.isArchive = false
+async function confirmDirectoryDepth(directoryDepth: number): Promise<number> {
+    while(true) {
+        const numberStr = await vscode.window.showInputBox({value: `${directoryDepth}`, prompt: 'How many leading directories must be discarded ?'})
+        if(numberStr === undefined) {
+            return new Promise((ok, _) => { ok(directoryDepth) })
+        }
+
+        const number = Number(numberStr)
+
+        if(Number.isNaN(number) || number < 0 || !Number.isInteger(number)) {
+            vscode.window.showErrorMessage('The directory depth must be a positive integer. It indicates how many leading directories must be discarded')
+        } else {
+            return new Promise((ok, _) => { ok(number) })
+        }
     }
-
-    return true
 }
 
 /**
@@ -149,7 +115,7 @@ function checkAndCleanConfigItem(templateName: string, templateInfo: TemplateCon
  * @param templateName 
  * @param templateInfo 
  */
-function findTemplateUriType(templateName: string, templateInfo: TemplateConfig): TemplateType {
+function findTemplateUriType(templateName: string, templateInfo: config.TemplateInfo): TemplateType {
     const isFilesystemUri = !isHttpUri(templateInfo.uri)
     
     if(isFilesystemUri && fs.statSync(templateInfo.uri).isDirectory()) {
@@ -172,7 +138,7 @@ function isHttpUri(uri: string) {
  * @param templateInfo 
  * @param targetDirectory Where the template must be copied to.
  */
-function fetchFromDirectory(templateInfo: TemplateConfig, targetDirectory: vscode.Uri) {
+function fetchFromDirectory(templateInfo: config.TemplateInfo, targetDirectory: vscode.Uri) {
     let [directoryPath, copyOnlyContent] = discardLeadingDirectories(templateInfo.uri, templateInfo.directoryDepth)
 
     const targetDirectorySuffix = '/' + (copyOnlyContent ? '' : path.basename(directoryPath))
@@ -185,7 +151,7 @@ function fetchFromDirectory(templateInfo: TemplateConfig, targetDirectory: vscod
                 }
             })
         } else {
-            logger.info('--done')
+            logger.info('Done')
         }
     })
 }
@@ -226,7 +192,7 @@ function discardLeadingDirectories(directoryPath: string, maxDepth: number): [st
  * @param templateInfo 
  * @param targetDirectory 
  */
-function fetchFromFile(templateInfo: TemplateConfig, targetDirectory: vscode.Uri) {
+function fetchFromFile(templateInfo: config.TemplateInfo, targetDirectory: vscode.Uri) {
     getUri(isHttpUri(templateInfo.uri) ? templateInfo.uri : `file:///${templateInfo.uri}`, (err, res) => {
         if(err) {
             logger.error(err.message)
@@ -245,24 +211,29 @@ function fetchFromFile(templateInfo: TemplateConfig, targetDirectory: vscode.Uri
                 extractArchive(buffer, templateInfo, targetDirectory)
             } else {
                 fs.writeFile(targetDirectory.fsPath + '/' + path.basename(templateInfo.uri), buffer, () => {
-                    logger.info('--done')
+                    logger.info('Done')
                 })
             }
         })
     })
 }
 
-function extractArchive(buffer: Buffer, templateInfo: TemplateConfig, targetDirecotry: vscode.Uri) {
-    logger.info('Unpacking files...')
+function extractArchive(buffer: Buffer, templateInfo: config.TemplateInfo, targetDirecotry: vscode.Uri) {
+    logger.info('Extracting files...')
     decompress(buffer, targetDirecotry.fsPath, {
      	strip: templateInfo.directoryDepth
-    }).then(() => {
-        logger.info('-- Done.')
-    }).catch((reason) => {
+    })
+    .then(files => {
+        logger.info(`${files.length} files have been extracted`)
+        if(files.length == 0) {
+            logger.warning('There is currently no error detection for archive extraction. Therefore, the extraction may have failed. At the moment, only .zip should work')
+        }
+        logger.info('Done')
+    }, err => {
+        logger.error(err)
+    })
+    .catch((reason) => {
         logger.error(`While unpacking files: ${reason}`)
     })
 }
 
-function logConfigError(itemName: string, itemFieldName: string, reason: string) {
-    logger.error(`On template "${itemName}":"${itemFieldName}" : ${reason}`)
-}

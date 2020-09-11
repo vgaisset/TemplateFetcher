@@ -3,6 +3,8 @@
 	"displayName": "TemplateFetcher",
 	"description": "A vscode extension to register and fetch template files or directories",
 	"version": "0.0.1",
+	"publisher": "vgaisset",
+	"repository": "https://github.com/vgaisset/TemplateFetcher",
 	"engines": {
 		"vscode": "^1.49.0"
 	},
@@ -10,14 +12,18 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:templatefetcher.fetch"
+		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
 				"command": "templatefetcher.fetch",
-				"title": "Fetch Template"
+				"title": "Template Fetcher: Fetch"
+			},
+			{
+				"command": "templatefetcher.newTemplate",
+				"title": "Template Fetcher: New Template"
 			}
 		],
 		"menus": {
@@ -31,7 +37,7 @@
 		"configuration": {
 			"title": "Template Fetcher",
 			"properties": {
-				"Templates.Info": {
+				"templatefetcher.templates": {
 					"type": "object",
 					"description": "Describe your templates here"
 				}
