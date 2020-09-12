@@ -34,7 +34,7 @@ export interface TemplateInfo {
  * Retrieves different templates informations written in user config file.
  * @returns map of TemplateConfig, indexed by their names.
  */
-export function getTemplatesInfo(): Map<string, TemplateInfo> {
+export function getTemplates(): Map<string, TemplateInfo> {
     let map = new Map<string, TemplateInfo>()
 
     const templatesObj = vscode.workspace.getConfiguration(templatesConfigID).get(configInfoID) as any
@@ -81,17 +81,30 @@ export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
     return true
 }
 
-export function createOrUpdateTemplateInfo(templateInfo: TemplateInfo) {
+export function createOrUpdateTemplate(template: TemplateInfo) {
     let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
-    let templatesInfoConfig = wsConfig.get(configInfoID) as any
+    let templates = wsConfig.get(configInfoID) as any
 
-    templatesInfoConfig[templateInfo.name] = {
-        uri: templateInfo.uri,
-        directoryDepth: templateInfo.directoryDepth,
-        isArchive: templateInfo.isArchive
+    templates[template.name] = {
+        uri: template.uri,
+        directoryDepth: template.directoryDepth,
+        isArchive: template.isArchive
     }
 
-    wsConfig.update(configInfoID, templatesInfoConfig, storeTemplatesInfoGlobally)
+    wsConfig.update(configInfoID, templates, storeTemplatesInfoGlobally)
+}
+
+export function deleteTemplate(template: TemplateInfo): boolean {
+    let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
+    let templates = wsConfig.get(configInfoID) as any
+
+    if(templates.hasOwnProperty(template.name)) {
+        templates[template.name] = undefined
+        wsConfig.update(configInfoID, templates, storeTemplatesInfoGlobally)
+        return true
+    } 
+    
+    return false
 }
 
 function logConfigError(itemName: string, itemFieldName: string, reason: string) {
