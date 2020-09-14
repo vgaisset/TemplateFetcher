@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import * as config from './config'
+import * as tools from './tools'
 import { DEFAULT_DISCARDED_LEADING_DIRECTORIES, TemplateType } from './templateCreation'
 
 interface SelectTemplateDialogOptions {
@@ -46,8 +47,8 @@ export async function newTemplate(): Promise<config.TemplateInfo | undefined> {
         return new Promise((ok, _) => { ok(undefined) })
     }
 
-    const directoryDepth = await askDiscardedLeadingDirectories(templateType)
-    if(directoryDepth === undefined) {
+    const discardedLeadingDirectories = await askDiscardedLeadingDirectories(templateType)
+    if(discardedLeadingDirectories === undefined) {
         return new Promise((ok, _) =>  { ok(undefined) })
     }
 
@@ -55,7 +56,7 @@ export async function newTemplate(): Promise<config.TemplateInfo | undefined> {
         ok({
             name: name,
             uri: uri,
-            directoryDepth: directoryDepth,
+            discardedLeadingDirectories: discardedLeadingDirectories,
             isArchive: templateType === TemplateType.ARCHIVE
         })
     })
@@ -132,6 +133,8 @@ export async function askURI(templateType: TemplateType): Promise<string | undef
     
             if(uri && uri.length === 0){ 
                 vscode.window.showErrorMessage('An URI can not be empty')
+            } else if(uri && tools.getUriProtocol(uri) === 'unsupported') {
+                vscode.window.showErrorMessage('The used protocol is not supported (file, ftp, http and https are supported)')
             } else {
                 return new Promise((ok, _) => { ok(uri) })
             }

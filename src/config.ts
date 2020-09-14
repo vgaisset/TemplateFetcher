@@ -18,14 +18,12 @@ export interface TemplateInfo {
     uri: string,
     /**
      * If the template is a directory, how many leading directories must be discarded ?
-     * If the value is 0, then the directory is copied.
-     * If the value is 1, then only the directory **content** is copied.
      */
-    directoryDepth: number,
+    discardedLeadingDirectories: number,
     /**
      * Specify if the file is an archive or not.
      * If so, content will be extracted.
-     * **directoryDepth** also applies on archives.
+     * **discardedLeadingDirectories** also applies on archives.
      */
     isArchive: boolean
 }
@@ -65,10 +63,10 @@ export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
         return false
     }
 
-    if(templateInfo.directoryDepth === undefined) {
-        templateInfo.directoryDepth = 0
+    if(templateInfo.discardedLeadingDirectories === undefined) {
+        templateInfo.discardedLeadingDirectories = 0
     } else {
-        if(templateInfo.directoryDepth < 0) {
+        if(templateInfo.discardedLeadingDirectories < 0) {
             logConfigError(templateInfo.name, 'directoryDepth', 'The directory depth can not have a negative value')
             return false
         }
@@ -81,19 +79,28 @@ export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
     return true
 }
 
+/**
+ * Saves a template in user's settings.
+ * @param template 
+ */
 export function createOrUpdateTemplate(template: TemplateInfo) {
     let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
     let templates = wsConfig.get(configInfoID) as any
 
     templates[template.name] = {
         uri: template.uri,
-        directoryDepth: template.directoryDepth,
+        discardedLeadingDirectories: template.discardedLeadingDirectories,
         isArchive: template.isArchive
     }
 
     wsConfig.update(configInfoID, templates, storeTemplatesInfoGlobally)
 }
 
+/**
+ * Deletes a template from user's settings, using template name as key.
+ * @param template 
+ * @returns true if the template has been deleted, false otherwise
+ */
 export function deleteTemplate(template: TemplateInfo): boolean {
     let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
     let templates = wsConfig.get(configInfoID) as any
