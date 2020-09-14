@@ -8,6 +8,7 @@ import * as ncp from 'ncp'
 import { Logger } from './logger'
 import * as config from './config'
 import * as dialogs from './dialogs'
+import * as tools from './tools'
 
 enum TemplateType {
     /**
@@ -34,7 +35,7 @@ const logger = new Logger('[Fetcher]')
  * It asks to user the template to fetch and then fetchs it.
  * @param target Where to fetch the template in
  */
-export default async function fetchCmd(target: vscode.Uri): Promise<void> {
+export default async function fetchCmd(target: vscode.Uri) {
     if(target === undefined) {
         const workspacesFolder = vscode.workspace.workspaceFolders
 
@@ -42,7 +43,6 @@ export default async function fetchCmd(target: vscode.Uri): Promise<void> {
             target = workspacesFolder[0].uri
         } else {
             await vscode.window.showErrorMessage('No target directory is provided and there is no open workspace')
-            return new Promise((ok, _) => { ok() })
         }
         logger.warning(`No target directory is specified, going to use '${target.fsPath}' instead`)
     }
@@ -62,33 +62,37 @@ export default async function fetchCmd(target: vscode.Uri): Promise<void> {
     })
 
     if(template) {        
-        if(config.checkAndCleanTemplateInfo(template)) {
-            logger.info(`Using template "${template.name}"`)
-            logger.info(`Fetching from "${template.uri}"`)
-            
-            try {
-                const templateType = findTemplateUriType(template)
-
-                if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
-                    template.directoryDepth = await confirmDirectoryDepth(template.directoryDepth)
-                    logger.takeFocus()
-                }
-                if(templateType == TemplateType.DIRECTORY) {
-                    fetchFromDirectory(template, target)
-                } else {
-                    fetchFromFile(template, target)
-                }
-            } catch(err) {
-                logger.error(err.message)
-                logger.takeFocus()
-            }
-
-            return new Promise((ok, _) => { ok() })
-        }
+        await fetchTemplate(template, target)
+        return
     }
     
     vscode.window.showErrorMessage('Template fetching cancelled')
-    return new Promise((ok, _) => { ok() })
+}
+
+async function fetchTemplate(template: config.TemplateInfo, targetDirectory: vscode.Uri) {
+    if(config.checkAndCleanTemplateInfo(template)) {
+        logger.info(`Using template "${template.name}"`)
+        logger.info(`Fetching from "${template.uri}"`)
+        
+        try {
+            const templateType = findTemplateUriType(template)
+
+            if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
+                template.discardedLeadingDirectories = await confirmDirectoryDepth(template.discardedLeadingDirectories)
+                logger.takeFocus()
+            }
+            if(templateType == TemplateType.DIRECTORY) {
+                fetchFromDirectory(template.uri, template.discardedLeadingDirectories, targetDirectory)
+            } else {
+                fetchFromFile(template.uri, targetDirectory, template.isArchive ? {
+                    discardedLeadingDirectories: template.discardedLeadingDirectories
+                } : undefined)
+            }
+        } catch(err) {
+            logger.error(err.message)
+            logger.takeFocus()
+        }
+    }
 }
 
 async function confirmDirectoryDepth(directoryDepth: number): Promise<number> {
@@ -114,21 +118,14 @@ async function confirmDirectoryDepth(directoryDepth: number): Promise<number> {
  * @param template 
  */
 function findTemplateUriType(template: config.TemplateInfo): TemplateType {
-    const isFilesystemUri = !isHttpUri(template.uri)
+    const uriProtocol = tools.getUriProtocol(template.uri)
+    const isFilesystemUri = uriProtocol == "file" || uriProtocol == "none"
     
     if(isFilesystemUri && fs.statSync(template.uri).isDirectory()) {
-        if(template.isArchive) {
-            logger.info(`The template ${template.name} uses a template directory but has 'isArchive' field to true`)
-        }
         return TemplateType.DIRECTORY
     }
 
     return template.isArchive ? TemplateType.ARCHIVE : TemplateType.FILE
-}
-
-function isHttpUri(uri: string) {
-    const htmlRegex = /^https?:\/\/.*/
-    return  htmlRegex.test(uri)
 }
 
 /**
@@ -136,8 +133,8 @@ function isHttpUri(uri: string) {
  * @param template 
  * @param targetDirectory Where the template must be copied to.
  */
-function fetchFromDirectory(template: config.TemplateInfo, targetDirectory: vscode.Uri) {
-    let [directoryPath, copyOnlyContent] = discardLeadingDirectories(template.uri, template.directoryDepth)
+function fetchFromDirectory(srcUri: string, discardedLeadingDirectories: number, targetDirectory: vscode.Uri) {
+    let [directoryPath, copyOnlyContent] = discardLeadingDirectories(srcUri, discardedLeadingDirectories)
 
     const targetDirectorySuffix = '/' + (copyOnlyContent ? '' : path.basename(directoryPath))
 
@@ -189,9 +186,13 @@ function discardLeadingDirectories(directoryPath: string, maxDepth: number): [st
  * Fetches from a filesystem file or from an http URL.
  * @param template 
  * @param targetDirectory 
+ * @param discardedLeadingDirectories If the file is an archive, how many leading directories must be discarded ? 
+ * If the value is undefined, then the file will NOT be considered as an archive.
  */
-function fetchFromFile(template: config.TemplateInfo, targetDirectory: vscode.Uri) {
-    getUri(isHttpUri(template.uri) ? template.uri : `file:///${template.uri}`, (err, res) => {
+function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archiveOptions?: {discardedLeadingDirectories: number}) {
+    const uriHasProtocol = tools.getUriProtocol(srcUri) != "none"
+
+    getUri(uriHasProtocol ? srcUri : `file:///${srcUri}`, (err, res) => {
         if(err) {
             logger.error(err.message)
             return
@@ -204,11 +205,11 @@ function fetchFromFile(template: config.TemplateInfo, targetDirectory: vscode.Ur
         })
         res?.on('end', () => {
             const buffer = Buffer.concat(chunks)
-
-            if(template.isArchive) {
-                extractArchive(buffer, template, targetDirectory)
+            
+            if(archiveOptions) {
+                extractArchive(buffer, archiveOptions.discardedLeadingDirectories, targetDirectory)
             } else {
-                fs.writeFile(targetDirectory.fsPath + '/' + path.basename(template.uri), buffer, () => {
+                fs.writeFile(targetDirectory.fsPath + '/' + path.basename(srcUri), buffer, () => {
                     logger.info('Done')
                 })
             }
@@ -216,11 +217,11 @@ function fetchFromFile(template: config.TemplateInfo, targetDirectory: vscode.Ur
     })
 }
 
-async function extractArchive(buffer: Buffer, template: config.TemplateInfo, targetDirecotry: vscode.Uri) {
+async function extractArchive(buffer: Buffer, discardedLeadingDirectories: number, targetDirecotry: vscode.Uri) {
     logger.info('Extracting files...')
 
     const files = await decompress(buffer, targetDirecotry.fsPath, {
-     	strip: template.directoryDepth
+     	strip: discardedLeadingDirectories
     })
 
     logger.info(`${files.length} files have been extracted`)

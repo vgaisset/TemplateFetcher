@@ -24,6 +24,10 @@
 			{
 				"command": "templatefetcher.newTemplate",
 				"title": "Template Fetcher: New Template"
+			},
+			{
+				"command": "templatefetcher.deleteTemplate",
+				"title": "Template Fetcher: Delete Template"
 			}
 		],
 		"menus": {
