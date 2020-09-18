@@ -5,12 +5,12 @@ import { DEFAULT_DISCARDED_LEADING_DIRECTORIES, TemplateType } from './templateC
 
 interface SelectTemplateDialogOptions {
     placeHolder?: string
-    filters?: Array<(template: config.TemplateInfo) => boolean>
+    filter?: (template: config.TemplateInfo) => boolean
 }
-export async function selectTemplate({placeHolder = 'Select a template', filters = []}: SelectTemplateDialogOptions): Promise<config.TemplateInfo | undefined> {
+export async function selectTemplate({placeHolder = 'Select a template', filter = undefined}: SelectTemplateDialogOptions): Promise<config.TemplateInfo | undefined> {
     const templates = config.getTemplates()
 
-    for(const filter of filters) {
+    if(filter) {
         for(const [name, template] of templates) {
             if(!filter(template)) {
                 templates.delete(name)
@@ -52,14 +52,13 @@ export async function newTemplate(): Promise<config.TemplateInfo | undefined> {
         return new Promise((ok, _) =>  { ok(undefined) })
     }
 
-    return new Promise((ok, _) => {
-        ok({
-            name: name,
-            uri: uri,
-            discardedLeadingDirectories: discardedLeadingDirectories,
-            isArchive: templateType === TemplateType.ARCHIVE
-        })
-    })
+    return {
+        name: name,
+        uri: uri,
+        discardedLeadingDirectories: discardedLeadingDirectories,
+        isArchive: templateType === TemplateType.ARCHIVE,
+        cacheName: '' // TODO: Ask for cache when creating template
+    }
 } 
 
 export async function askTemplateName(): Promise<string | undefined> {

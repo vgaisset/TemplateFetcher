@@ -22,6 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('templatefetcher.setCacheDirectory', cache.setCacheDirectoryCmd)
+		vscode.commands.registerCommand('templatefetcher.setCachePath', cache.setCacheDirectoryCmd)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('templatefetcher.newTemplateCache', cache.newTemplateCacheCmd)
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('templatefetcher.deleteTemplateCache', cache.deleteTemplateCacheCmd)
 	);
 }

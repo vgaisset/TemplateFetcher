@@ -78,14 +78,14 @@ async function fetchTemplate(template: config.TemplateInfo, targetDirectory: vsc
             const templateType = findTemplateUriType(template)
 
             if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
-                template.discardedLeadingDirectories = await confirmDirectoryDepth(template.discardedLeadingDirectories)
+                template.discardedLeadingDirectories = await confirmDirectoryDepth(template.discardedLeadingDirectories || 0)
                 logger.takeFocus()
             }
             if(templateType == TemplateType.DIRECTORY) {
-                fetchFromDirectory(template.uri, template.discardedLeadingDirectories, targetDirectory)
+                fetchFromDirectory(template.uri, template.discardedLeadingDirectories || 0, targetDirectory)
             } else {
                 fetchFromFile(template.uri, targetDirectory, template.isArchive ? {
-                    discardedLeadingDirectories: template.discardedLeadingDirectories
+                    discardedLeadingDirectories: template.discardedLeadingDirectories || 0
                 } : undefined)
             }
         } catch(err) {

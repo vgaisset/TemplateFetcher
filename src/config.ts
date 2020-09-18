@@ -1,6 +1,5 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
-//import * as fsp from 'fs/promises'
 
 import { Logger } from './logger'
 import { ErrorResult, OkResult, Result } from './tools'
@@ -26,13 +25,17 @@ export interface TemplateInfo {
     /**
      * If the template is a directory, how many leading directories must be discarded ?
      */
-    discardedLeadingDirectories: number,
+    discardedLeadingDirectories?: number,
     /**
      * Specify if the file is an archive or not.
      * If so, content will be extracted.
      * **discardedLeadingDirectories** also applies on archives.
      */
-    isArchive: boolean
+    isArchive: boolean,
+    /**
+     * Name of the template cache folder.
+     */
+    cacheName?: string
 }
 
 /**
@@ -97,7 +100,8 @@ export async function createOrUpdateTemplate(template: TemplateInfo) {
     templates[template.name] = {
         uri: template.uri,
         discardedLeadingDirectories: template.discardedLeadingDirectories,
-        isArchive: template.isArchive
+        isArchive: template.isArchive,
+        cacheName: template.cacheName,
     }
 
     await wsConfig.update(templatesID, templates, storeTemplatesInfoGlobally)
@@ -134,15 +138,15 @@ export async function getCachePath(): Promise<Result<string, CachePathErrors>> {
         try {
             const stats = await fs.promises.stat(cachePath)
             if(stats.isDirectory()) {
-                return OkResult.promise(cachePath)
+                return new OkResult(cachePath)
             }
         } catch(err) {
-            return ErrorResult.promise(CachePathErrors.INVALID_PATH)
+            return new ErrorResult(CachePathErrors.INVALID_PATH)
         }
 
-        return ErrorResult.promise(CachePathErrors.NOT_A_DIRECTORY)
+        return new ErrorResult(CachePathErrors.NOT_A_DIRECTORY)
     } 
-    return ErrorResult.promise(CachePathErrors.PATH_NOT_SET)
+    return new ErrorResult(CachePathErrors.PATH_NOT_SET)
 }
 
 export async function setCachePath(newCachePath: string) {

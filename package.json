@@ -30,8 +30,16 @@
 				"title": "Template Fetcher: Delete Template"
 			},
 			{
-				"command": "templatefetcher.setCacheDirectory",
-				"title": "Template Fetcher: Set Cache Directory"
+				"command": "templatefetcher.setCachePath",
+				"title": "Template Fetcher: Set Cache Path"
+			},
+			{
+				"command": "templatefetcher.newTemplateCache",
+				"title": "Template Fetcher: New Template Cache"
+			},
+			{
+				"command": "templatefetcher.deleteTemplateCache",
+				"title": "Template Fetcher: Delete Template Cache"
 			}
 		],
 		"menus": {
