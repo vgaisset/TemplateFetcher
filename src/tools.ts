@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto"
+
 const useFileProtocolRegex = /^file:\/\/.*/
 const useHttpProtocolRegex = /^https?:\/\/.*/
 const useFtpProtocolRegex = /^ftp:\/\/.*/
@@ -24,5 +26,51 @@ export function getUriProtocol(uri: string): 'none' | 'unsupported' | 'file' | '
         return "unsupported"
     } else {
         return "none"
+    }
+}
+
+export interface Result<TYPE, ERROR> {
+    isOk(): this is OkResult<TYPE, ERROR>
+    isError(): this is ErrorResult<TYPE, ERROR>
+    unwrap(): TYPE | ERROR
+}
+
+export class OkResult<TYPE, ERROR> implements Result<TYPE, ERROR> {
+    constructor(protected value: TYPE) {}
+    
+    isOk(): this is OkResult<TYPE, ERROR> {
+        return true
+    }
+    
+    isError(): this is ErrorResult<TYPE, ERROR> {
+        return false
+    }   
+
+    unwrap(): TYPE {
+        return this.value
+    }
+
+    static promise<TYPE, ERROR>(value: TYPE): Promise<OkResult<TYPE, ERROR>> {
+        return new Promise(ok => ok(new OkResult<TYPE, ERROR>(value)))
+    }
+}
+
+export class ErrorResult<TYPE, ERROR> implements Result<TYPE, ERROR> {
+    constructor(protected value: ERROR) {}
+
+    isOk(): this is OkResult<TYPE, ERROR> {
+        return false
+    }
+
+    isError(): this is ErrorResult<TYPE, ERROR> {
+        return true
+    }   
+
+    unwrap(): ERROR {
+        return this.value
+    }
+
+    static promise<TYPE, ERROR>(error: ERROR): Promise<ErrorResult<TYPE, ERROR>> {
+        return new Promise(ok => ok(new ErrorResult<TYPE, ERROR>(error)))
     }
 }

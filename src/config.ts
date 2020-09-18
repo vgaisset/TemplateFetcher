@@ -1,11 +1,18 @@
 import * as vscode from 'vscode'
+import * as fs from 'fs'
+//import * as fsp from 'fs/promises'
+
 import { Logger } from './logger'
+import { ErrorResult, OkResult, Result } from './tools'
 
 let logger = new Logger('[Config]')
 
-const templatesConfigID = 'templatefetcher'
-const configInfoID = 'templates'
+const templateFetcherID = 'templatefetcher'
+const templatesID = 'templates'
+const cachePathID = 'cachePath'
+
 const storeTemplatesInfoGlobally = true
+const storeCachePathGlobally = true
 
 export interface TemplateInfo {
     /**
@@ -35,7 +42,7 @@ export interface TemplateInfo {
 export function getTemplates(): Map<string, TemplateInfo> {
     let map = new Map<string, TemplateInfo>()
 
-    const templatesObj = vscode.workspace.getConfiguration(templatesConfigID).get(configInfoID) as any
+    const templatesObj = vscode.workspace.getConfiguration(templateFetcherID).get(templatesID) as any
 
     for(const templateName in templatesObj) {
         let template = templatesObj[templateName] as TemplateInfo
@@ -83,9 +90,9 @@ export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
  * Saves a template in user's settings.
  * @param template 
  */
-export function createOrUpdateTemplate(template: TemplateInfo) {
-    let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
-    let templates = wsConfig.get(configInfoID) as any
+export async function createOrUpdateTemplate(template: TemplateInfo) {
+    let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
+    let templates = wsConfig.get(templatesID) as any
 
     templates[template.name] = {
         uri: template.uri,
@@ -93,7 +100,7 @@ export function createOrUpdateTemplate(template: TemplateInfo) {
         isArchive: template.isArchive
     }
 
-    wsConfig.update(configInfoID, templates, storeTemplatesInfoGlobally)
+    await wsConfig.update(templatesID, templates, storeTemplatesInfoGlobally)
 }
 
 /**
@@ -101,17 +108,46 @@ export function createOrUpdateTemplate(template: TemplateInfo) {
  * @param template 
  * @returns true if the template has been deleted, false otherwise
  */
-export function deleteTemplate(template: TemplateInfo): boolean {
-    let wsConfig = vscode.workspace.getConfiguration(templatesConfigID)
-    let templates = wsConfig.get(configInfoID) as any
+export async function deleteTemplate(template: TemplateInfo): Promise<boolean> {
+    let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
+    let templates = wsConfig.get(templatesID) as any
 
     if(templates.hasOwnProperty(template.name)) {
         templates[template.name] = undefined
-        wsConfig.update(configInfoID, templates, storeTemplatesInfoGlobally)
+        await wsConfig.update(templatesID, templates, storeTemplatesInfoGlobally)
         return true
     } 
     
     return false
+}
+
+export enum CachePathErrors {
+    INVALID_PATH,
+    NOT_A_DIRECTORY,
+    PATH_NOT_SET
+}
+export async function getCachePath(): Promise<Result<string, CachePathErrors>> {
+    let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
+    let cachePath = wsConfig.get(cachePathID) as string
+
+    if(cachePath) {
+        try {
+            const stats = await fs.promises.stat(cachePath)
+            if(stats.isDirectory()) {
+                return OkResult.promise(cachePath)
+            }
+        } catch(err) {
+            return ErrorResult.promise(CachePathErrors.INVALID_PATH)
+        }
+
+        return ErrorResult.promise(CachePathErrors.NOT_A_DIRECTORY)
+    } 
+    return ErrorResult.promise(CachePathErrors.PATH_NOT_SET)
+}
+
+export async function setCachePath(newCachePath: string) {
+    let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
+    await wsConfig.update(cachePathID, newCachePath, storeCachePathGlobally)
 }
 
 function logConfigError(itemName: string, itemFieldName: string, reason: string) {
