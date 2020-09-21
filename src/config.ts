@@ -3,6 +3,7 @@ import * as fs from 'fs'
 
 import { Logger } from './logger'
 import { ErrorResult, OkResult, Result } from './tools'
+import { Template } from './Template'
 
 let logger = new Logger('[Config]')
 
@@ -13,77 +14,64 @@ const cachePathID = 'cachePath'
 const storeTemplatesInfoGlobally = true
 const storeCachePathGlobally = true
 
-export interface TemplateInfo {
-    /**
-     * The name representing the template.
-     */
-    name: string
-    /**
-     * Template location. It can be an absolute path or an URL.
-     */
-    uri: string,
-    /**
-     * If the template is a directory, how many leading directories must be discarded ?
-     */
-    discardedLeadingDirectories?: number,
-    /**
-     * Specify if the file is an archive or not.
-     * If so, content will be extracted.
-     * **discardedLeadingDirectories** also applies on archives.
-     */
-    isArchive: boolean,
-    /**
-     * Name of the template cache folder.
-     */
-    cacheName?: string
-}
-
 /**
  * Retrieves different templates informations written in user config file.
  * @returns map of TemplateConfig, indexed by their names.
  */
-export function getTemplates(): Map<string, TemplateInfo> {
-    let map = new Map<string, TemplateInfo>()
+export function getTemplates(): { validTemplates: Map<string, Template>, invalidTemplateErrors: Array<string> } {
+    let validTemplates = new Map<string, Template>()
+    let invalidTemplateErrors = new Array<string>()
 
     const templatesObj = vscode.workspace.getConfiguration(templateFetcherID).get(templatesID) as any
-
+    
     for(const templateName in templatesObj) {
-        let template = templatesObj[templateName] as TemplateInfo
-        template.name = templateName
-
-        map.set(templateName, template)
+        const configTemplate = templatesObj[templateName] 
+        try {
+            const template = new Template(
+                templateName, configTemplate.uri, 
+                configTemplate.isArchive, configTemplate.discardedLeadingDirectories, 
+                configTemplate.cacheName
+            )
+    
+            validTemplates.set(templateName, template)
+        } catch(err) {
+            invalidTemplateErrors.push(`'${templateName}' template has an error: ${err}`)
+        }
     }
 
-    return map
+    return {
+        validTemplates: validTemplates,
+        invalidTemplateErrors: invalidTemplateErrors
+    }
 }
 
 /**
  * Checks validity of the different template parameters.
  * If some parameters are omitted, then default values are affected.
  * @param templateName
- * @param templateInfo 
+ * @param template 
  */
-export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
-    if(templateInfo.uri === undefined) {
-        logConfigError(templateInfo.name, 'uri', 'URI field is mandatory in order to fetch project template')
+export function checkAndCleanTemplateInfo(template: Template): boolean {
+    if(template.uri === undefined) {
+        logConfigError(template.name, 'uri', 'URI field is mandatory in order to fetch project template')
         return false
     }
-    if(templateInfo.uri.trim().length === 0) {
-        logConfigError(templateInfo.name, 'uri', 'An URI can not be empty')
+    if(template.uri.trim().length === 0) {
+        logConfigError(template.name, 'uri', 'An URI can not be empty')
         return false
     }
 
-    if(templateInfo.discardedLeadingDirectories === undefined) {
-        templateInfo.discardedLeadingDirectories = 0
+    if(template.discardedLeadingDirectories === undefined) {
+        template.discardedLeadingDirectories = 0
     } else {
-        if(templateInfo.discardedLeadingDirectories < 0) {
-            logConfigError(templateInfo.name, 'directoryDepth', 'The directory depth can not have a negative value')
+        if(template.discardedLeadingDirectories < 0) {
+            logConfigError(template.name, 'directoryDepth', 'The directory depth can not have a negative value')
             return false
         }
     }
 
-    if(templateInfo.isArchive === undefined) {
-        templateInfo.isArchive = false
+    if(template.isArchive === undefined) {
+        template.isArchive = false
     }
 
     return true
@@ -93,7 +81,7 @@ export function checkAndCleanTemplateInfo(templateInfo: TemplateInfo): boolean {
  * Saves a template in user's settings.
  * @param template 
  */
-export async function createOrUpdateTemplate(template: TemplateInfo) {
+export async function createOrUpdateTemplate(template: Template) {
     let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
     let templates = wsConfig.get(templatesID) as any
 
@@ -112,7 +100,7 @@ export async function createOrUpdateTemplate(template: TemplateInfo) {
  * @param template 
  * @returns true if the template has been deleted, false otherwise
  */
-export async function deleteTemplate(template: TemplateInfo): Promise<boolean> {
+export async function deleteTemplate(template: Template): Promise<boolean> {
     let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
     let templates = wsConfig.get(templatesID) as any
 

@@ -4,6 +4,7 @@ import * as vscode from 'vscode'
 import * as config from './config'
 import * as tools from './tools'
 import * as dialogs from './dialogs'
+import { Template } from './Template'
 
 export async function setCacheDirectoryCmd(): Promise<string | undefined> {
     const currentCachePath = await config.getCachePath()
@@ -19,7 +20,7 @@ export async function setCacheDirectoryCmd(): Promise<string | undefined> {
     if(selectedPaths) {
         const path = selectedPaths[0].fsPath
         await config.setCachePath(path)
-        vscode.window.showInformationMessage('The cache directory has been updated')
+        vscode.window.showInformationMessage('The cache path has been updated')
         return path
     }
 
@@ -43,7 +44,7 @@ export async function newTemplateCacheCmd() {
     }
 }
 
-export async function newTemplateCache(template: config.TemplateInfo) {
+export async function newTemplateCache(template: Template) {
     const templateCacheName = tools.generateStringIdentifier()
     const cachePath = await tools.tryToGetCachePath()
 
@@ -70,7 +71,7 @@ export async function deleteTemplateCacheCmd() {
     }
 }
 
-export async function deleteTemplateCache(template: config.TemplateInfo) {
+export async function deleteTemplateCache(template: Template) {
     const cachePath = await tools.tryToGetCachePath()
 
     if(cachePath) {

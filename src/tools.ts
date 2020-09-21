@@ -50,10 +50,10 @@ export function generateStringIdentifier(): string {
     let identifier = String(now.getFullYear())
     identifier += String(now.getMonth() + 1).padStart(2, '0')
     identifier += String(now.getDate()).padStart(2, '0')
-    identifier += String(now.getHours())
-    identifier += String(now.getMinutes())
-    identifier += String(now.getSeconds())
-    identifier += String(now.getMilliseconds())
+    identifier += String(now.getHours()).padStart(2, '0')
+    identifier += String(now.getMinutes()).padStart(2, '0')
+    identifier += String(now.getSeconds()).padStart(2, '0')
+    identifier += String(now.getMilliseconds()).padStart(3, '0')
     identifier += String(randomInt(0, 9999)).padStart(4, '0')
     
     return identifier

@@ -2,35 +2,38 @@ import * as vscode from 'vscode'
 import * as config from './config'
 import * as tools from './tools'
 import { DEFAULT_DISCARDED_LEADING_DIRECTORIES, TemplateType } from './templateCreation'
+import { Template } from './Template'
 
 interface SelectTemplateDialogOptions {
     placeHolder?: string
-    filter?: (template: config.TemplateInfo) => boolean
+    filter?: (template: Template) => boolean
 }
-export async function selectTemplate({placeHolder = 'Select a template', filter = undefined}: SelectTemplateDialogOptions): Promise<config.TemplateInfo | undefined> {
-    const templates = config.getTemplates()
+export async function selectTemplate({placeHolder = 'Select a template', filter = undefined}: SelectTemplateDialogOptions): Promise<Template | undefined> {
+    const selection = config.getTemplates()
+
+    for(const err of selection.invalidTemplateErrors) {
+        vscode.window.showErrorMessage(err)
+    }
 
     if(filter) {
-        for(const [name, template] of templates) {
+        for(const [name, template] of selection.validTemplates) {
             if(!filter(template)) {
-                templates.delete(name)
+                selection.validTemplates.delete(name)
             }
         }
     }
 
-    const templateNames = Array.from(templates.keys())
+    const templateNames = Array.from(selection.validTemplates.keys())
     if(templateNames.length === 0) {
         placeHolder = 'No template to show off'
     }
 
     const templateName = await vscode.window.showQuickPick(templateNames, {placeHolder: placeHolder})
 
-    return new Promise((ok, _) => { 
-        ok(templateName ? templates.get(templateName) : undefined) 
-    })
+    return templateName ? selection.validTemplates.get(templateName) : undefined
 }
 
-export async function newTemplate(): Promise<config.TemplateInfo | undefined> {
+export async function newTemplate(): Promise<Template | undefined> {
     const name = await askTemplateName()
 
     if(name === undefined) {
@@ -58,14 +61,14 @@ export async function newTemplate(): Promise<config.TemplateInfo | undefined> {
         discardedLeadingDirectories: discardedLeadingDirectories,
         isArchive: templateType === TemplateType.ARCHIVE,
         cacheName: '' // TODO: Ask for cache when creating template
-    }
+    } as Template // TODO: tmp
 } 
 
 export async function askTemplateName(): Promise<string | undefined> {
     while(true) {
         const name = await vscode.window.showInputBox({placeHolder: 'Enter your template name'})
 
-        if(name && config.getTemplates().has(name)) {
+        if(name && config.getTemplates().validTemplates.has(name)) {
             vscode.window.showErrorMessage(`The template '${name}' already exist`)
         } else if(name?.length === 0) {
             vscode.window.showErrorMessage(`A template name can not be empty`)
@@ -160,6 +163,23 @@ export async function askDiscardedLeadingDirectories(templateType: TemplateType)
             vscode.window.showErrorMessage('The directory depth must be a positive integer. It indicates how many leading directories must be discarded')
         } else {
             return new Promise((ok, _) => { ok(number) })
+        }
+    }
+}
+
+export async function confirmDirectoryDepth(directoryDepth: number): Promise<number> {
+    while(true) {
+        const numberStr = await vscode.window.showInputBox({value: `${directoryDepth}`, prompt: 'How many leading directories must be discarded ?'})
+        if(numberStr === undefined) {
+            return directoryDepth
+        }
+
+        const number = Number(numberStr)
+
+        if(Number.isNaN(number) || number < 0 || !Number.isInteger(number)) {
+            vscode.window.showErrorMessage('The directory depth must be a positive integer. It indicates how many leading directories must be discarded')
+        } else {
+            return number
         }
     }
 }

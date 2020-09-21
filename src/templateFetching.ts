@@ -10,24 +10,6 @@ import * as config from './config'
 import * as dialogs from './dialogs'
 import * as tools from './tools'
 
-enum TemplateType {
-    /**
-     * A new file is created on the requested directory
-     * using the template filename, and then the content is copied.
-     */
-    FILE,
-    /**
-     * The template directory is copied into the requested directory.
-     * The config parameter 'directoryDepth' can be used in order to indicate from how many leading directories must be discarded.
-     */
-    DIRECTORY,
-    /**
-     * Same behavior as DIRECTORY.
-     * In order to consider a file as archive, use the config parameter 'isArchive'.
-     */
-    ARCHIVE,
-}
-
 const logger = new Logger('[Fetcher]')
 
 /**
@@ -47,85 +29,32 @@ export default async function fetchCmd(target: vscode.Uri) {
         logger.warning(`No target directory is specified, going to use '${target.fsPath}' instead`)
     }
 
-    if(config.getTemplates().size === 0) {
-        const value = await vscode.window.showErrorMessage('There are no templates defined', 'New template')
-
-        if(value === 'New template') {
-            vscode.commands.executeCommand('templatefetcher.newTemplate')
-        }
-
-        return new Promise((ok, _) => { ok() })
-    }
-
     const template = await dialogs.selectTemplate({
         placeHolder: 'Select a template to fetch'
     })
 
     if(template) {        
-        await fetchTemplate(template, target)
+        await template.fetch(target)
         return
     }
-    
-    vscode.window.showErrorMessage('Template fetching cancelled')
-}
 
-async function fetchTemplate(template: config.TemplateInfo, targetDirectory: vscode.Uri) {
-    if(config.checkAndCleanTemplateInfo(template)) {
-        logger.info(`Using template "${template.name}"`)
-        logger.info(`Fetching from "${template.uri}"`)
-        
-        try {
-            const templateType = findTemplateUriType(template)
-
-            if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
-                template.discardedLeadingDirectories = await confirmDirectoryDepth(template.discardedLeadingDirectories || 0)
-                logger.takeFocus()
-            }
-            if(templateType == TemplateType.DIRECTORY) {
-                fetchFromDirectory(template.uri, template.discardedLeadingDirectories || 0, targetDirectory)
-            } else {
-                fetchFromFile(template.uri, targetDirectory, template.isArchive ? {
-                    discardedLeadingDirectories: template.discardedLeadingDirectories || 0
-                } : undefined)
-            }
-        } catch(err) {
-            logger.error(err.message)
-            logger.takeFocus()
-        }
-    }
-}
-
-async function confirmDirectoryDepth(directoryDepth: number): Promise<number> {
-    while(true) {
-        const numberStr = await vscode.window.showInputBox({value: `${directoryDepth}`, prompt: 'How many leading directories must be discarded ?'})
-        if(numberStr === undefined) {
-            return new Promise((ok, _) => { ok(directoryDepth) })
-        }
-
-        const number = Number(numberStr)
-
-        if(Number.isNaN(number) || number < 0 || !Number.isInteger(number)) {
-            vscode.window.showErrorMessage('The directory depth must be a positive integer. It indicates how many leading directories must be discarded')
+    const selection = config.getTemplates()
+    if(selection.invalidTemplateErrors.length != 0)
+    if(selection.validTemplates.size === 0) {
+        let value: string | undefined
+        if(selection.invalidTemplateErrors.length != 0) {
+            value = await vscode.window.showErrorMessage('There are no valid templates', 'New template', 'Edit templates')
         } else {
-            return new Promise((ok, _) => { ok(number) })
+            value = await vscode.window.showErrorMessage('There are no templates defined', 'New template')
         }
-    }
-}
 
-/**
- * Determines if a template URI is a file, a directory or an archive.
- * This function does not guarantee the URI validity.
- * @param template 
- */
-function findTemplateUriType(template: config.TemplateInfo): TemplateType {
-    const uriProtocol = tools.getUriProtocol(template.uri)
-    const isFilesystemUri = uriProtocol == "file" || uriProtocol == "none"
-    
-    if(isFilesystemUri && fs.statSync(template.uri).isDirectory()) {
-        return TemplateType.DIRECTORY
+        if(value === 'New template') {
+            vscode.commands.executeCommand('templatefetcher.newTemplate')
+        } else if(value == 'Edit templates') {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'templatefetcher.templates')
+        }
+        return
     }
-
-    return template.isArchive ? TemplateType.ARCHIVE : TemplateType.FILE
 }
 
 /**
@@ -133,7 +62,7 @@ function findTemplateUriType(template: config.TemplateInfo): TemplateType {
  * @param template 
  * @param targetDirectory Where the template must be copied to.
  */
-function fetchFromDirectory(srcUri: string, discardedLeadingDirectories: number, targetDirectory: vscode.Uri) {
+export function fetchFromDirectory(srcUri: string, discardedLeadingDirectories: number, targetDirectory: vscode.Uri) {
     let [directoryPath, copyOnlyContent] = discardLeadingDirectories(srcUri, discardedLeadingDirectories)
 
     const targetDirectorySuffix = '/' + (copyOnlyContent ? '' : path.basename(directoryPath))
@@ -189,7 +118,7 @@ function discardLeadingDirectories(directoryPath: string, maxDepth: number): [st
  * @param discardedLeadingDirectories If the file is an archive, how many leading directories must be discarded ? 
  * If the value is undefined, then the file will NOT be considered as an archive.
  */
-function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archiveOptions?: {discardedLeadingDirectories: number}) {
+export function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archiveOptions?: {discardedLeadingDirectories: number}) {
     const uriHasProtocol = tools.getUriProtocol(srcUri) != "none"
 
     getUri(uriHasProtocol ? srcUri : `file:///${srcUri}`, (err, res) => {
