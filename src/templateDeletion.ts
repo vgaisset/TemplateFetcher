@@ -7,7 +7,7 @@ export default async function templateDeletionCmd() {
 
     if(template) {
         if(config.deleteTemplate(template)) {
-            vscode.window.showInformationMessage(`The ${template.name} has been successfully deleted`)
+            vscode.window.showInformationMessage(`The '${template.name}' template has been successfully deleted`)
         } else {
             vscode.window.showErrorMessage(`Failed to delete the '${template.name}' template (not found in user settings)`)
         }

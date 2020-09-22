@@ -6,7 +6,7 @@ import { Logger } from './logger'
 import * as tools from './tools'
 import * as config from './config'
 import * as dialogs from './dialogs'
-import { Ensures, MatchRegex, NotEmpty, NotNegative, NotNull } from './checkDecorators'
+import { Ensures, NotEmpty, NotNegative } from './checkDecorators'
 
 let logger = new Logger('[Template]')
 
@@ -94,6 +94,24 @@ export class Template {
         }
 
         return this.isArchive ? TemplateType.ARCHIVE : TemplateType.FILE
+    }
+
+    async newCache(): Promise<tools.Result<string, any | undefined>> {
+        const templateCacheName = tools.generateStringIdentifier()
+        const cachePath = await tools.tryToGetCachePath()
+    
+        if(cachePath) {
+            const templateCachePath = `${cachePath}/${templateCacheName}`
+            try {
+                await fs.promises.mkdir(templateCachePath)
+                this.cacheName = templateCacheName
+                return new tools.OkResult(this.cacheName)
+            } catch(err) {
+                return new tools.ErrorResult(err)
+            }
+        }
+
+        return new tools.ErrorResult(undefined)
     }
 }
 

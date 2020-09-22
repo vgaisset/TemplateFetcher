@@ -3,6 +3,7 @@ import * as config from './config'
 import * as tools from './tools'
 import { DEFAULT_DISCARDED_LEADING_DIRECTORIES, TemplateType } from './templateCreation'
 import { Template } from './Template'
+import { newTemplateCache } from './templateCaching'
 
 interface SelectTemplateDialogOptions {
     placeHolder?: string
@@ -37,31 +38,43 @@ export async function newTemplate(): Promise<Template | undefined> {
     const name = await askTemplateName()
 
     if(name === undefined) {
-        return new Promise((ok, _) => { ok(undefined) })
+        return undefined
     }
     
     const templateType = await askTemplateType()
     if(templateType === undefined) {
-        return new Promise((ok, _) => { ok(undefined) })
+        return undefined
     }
 
     const uri = await askURI(templateType)
     if(uri === undefined) {
-        return new Promise((ok, _) => { ok(undefined) })
+        return undefined
     }
 
     const discardedLeadingDirectories = await askDiscardedLeadingDirectories(templateType)
     if(discardedLeadingDirectories === undefined) {
-        return new Promise((ok, _) =>  { ok(undefined) })
+        return undefined
     }
 
-    return {
-        name: name,
-        uri: uri,
-        discardedLeadingDirectories: discardedLeadingDirectories,
-        isArchive: templateType === TemplateType.ARCHIVE,
-        cacheName: '' // TODO: Ask for cache when creating template
-    } as Template // TODO: tmp
+    let newTemplate =  new Template(name, uri, templateType === TemplateType.ARCHIVE, discardedLeadingDirectories)
+
+    if(tools.getUriProtocol(uri) !== "none") {
+        const createCache = await vscode.window.showQuickPick(['Yes', 'No'], {
+            placeHolder: 'Your template seems to rely on a network connection. Do you want to create a cache for it ?'
+        })
+        if(createCache === 'Yes') {
+            const result = await newTemplate.newCache()
+            if(result.isError()) {
+                if(result.unwrap()) {
+                    vscode.window.showErrorMessage(`Failed to create cache for your '${newTemplate.name}' template: ${result.unwrap()}`)
+                } else {
+                    return undefined
+                }
+            }
+        }
+    }
+
+    return newTemplate
 } 
 
 export async function askTemplateName(): Promise<string | undefined> {
@@ -118,7 +131,7 @@ export async function askURI(templateType: TemplateType): Promise<string | undef
     const uriInputType = await vscode.window.showQuickPick([uriFromFs, uriFromText], {placeHolder: 'From where to fetch your template ?'})
 
     if(uriInputType === undefined) {
-        return new Promise((ok, _) => { ok(undefined) })
+        return undefined
     }
 
     if(uriInputType === uriFromFs) {
@@ -138,7 +151,7 @@ export async function askURI(templateType: TemplateType): Promise<string | undef
             } else if(uri && tools.getUriProtocol(uri) === 'unsupported') {
                 vscode.window.showErrorMessage('The used protocol is not supported (file, ftp, http and https are supported)')
             } else {
-                return new Promise((ok, _) => { ok(uri) })
+                return uri
             }
         }
     }
@@ -146,7 +159,7 @@ export async function askURI(templateType: TemplateType): Promise<string | undef
 
 export async function askDiscardedLeadingDirectories(templateType: TemplateType): Promise<number | undefined> {
     if(templateType === TemplateType.FILE) {
-        return new Promise((ok, _) => { ok(0) })
+        return 0
     }
 
     while(true) {
@@ -182,4 +195,18 @@ export async function confirmDirectoryDepth(directoryDepth: number): Promise<num
             return number
         }
     }
+}
+
+export async function askCachePath(): Promise<string | undefined> {
+    const currentCachePath = await config.getCachePath()
+
+    const selectedPath = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        defaultUri: currentCachePath.isOk() ? vscode.Uri.file(currentCachePath.unwrap()) : undefined,
+        title: 'Select the location where template caches will be saved in'
+    })
+
+    return selectedPath ? selectedPath[0].fsPath : undefined
 }

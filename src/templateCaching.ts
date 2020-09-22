@@ -7,18 +7,9 @@ import * as dialogs from './dialogs'
 import { Template } from './Template'
 
 export async function setCacheDirectoryCmd(): Promise<string | undefined> {
-    const currentCachePath = await config.getCachePath()
+    const path = await dialogs.askCachePath()
 
-    const selectedPaths = await vscode.window.showOpenDialog({
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        defaultUri: currentCachePath.isOk() ? vscode.Uri.file(currentCachePath.unwrap()) : undefined,
-        title: 'Select the location where template caches will be saved in'
-    })
-
-    if(selectedPaths) {
-        const path = selectedPaths[0].fsPath
+    if(path) {
         await config.setCachePath(path)
         vscode.window.showInformationMessage('The cache path has been updated')
         return path
@@ -45,18 +36,16 @@ export async function newTemplateCacheCmd() {
 }
 
 export async function newTemplateCache(template: Template) {
-    const templateCacheName = tools.generateStringIdentifier()
-    const cachePath = await tools.tryToGetCachePath()
+    const newCacheName = await template.newCache()
 
-    if(cachePath) {
-        const templateCachePath = `${cachePath}/${templateCacheName}`
-        try {
-            await fs.promises.mkdir(templateCachePath)
-            template.cacheName = templateCacheName
-            await config.createOrUpdateTemplate(template)
-            vscode.window.showInformationMessage(`'${template.name}' template cache has been created at ${templateCachePath}`)
-        } catch(err) {
-            vscode.window.showErrorMessage(`Failed to create ${templateCachePath}: ${err}`)
+    if(newCacheName.isOk()) {
+        await config.createOrUpdateTemplate(template)
+        vscode.window.showInformationMessage(`'${template.name}' template cache has been created at ${newCacheName}`)
+    } else {
+        const err = newCacheName.unwrap()
+
+        if(err) {
+            vscode.window.showErrorMessage(`Failed to create '${template.name}' cache: ${err}`)
         }
     }
 }
