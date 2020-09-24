@@ -1,12 +1,13 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 
-import { fetchFromDirectory, fetchFromFile } from './templateFetching'
-import { Logger } from './logger'
-import * as tools from './tools'
-import * as config from './config'
-import * as dialogs from './dialogs'
-import { Ensures, NotEmpty, NotNegative } from './checkDecorators'
+import { fetchFromDirectory, fetchFromFile } from '../templateFetching'
+import { Logger } from '../logger'
+import * as tools from '../tools'
+import * as config from '../config'
+import * as dialogs from '../dialogs'
+import { Ensures, MatchRegex, NotEmpty, NotNegative } from '../checkDecorators'
+import { Uri } from './Uri'
 
 let logger = new Logger('[Template]')
 
@@ -19,8 +20,7 @@ export class Template {
     /**
      * Template location. It can be an absolute path or an URL.
      */
-    @NotEmpty(uri => uri.trim())
-    uri: string;
+    uri: Uri;
     /**
      * If the template is a directory, how many leading directories must be discarded ?
      */
@@ -36,10 +36,10 @@ export class Template {
      * Name of the template cache folder.
      */
     @Ensures<string | undefined>('Must be 21 characters long', v => v === undefined || v.length == 21)
-    //@MatchRegex(/^[0-9]+/)
+    @MatchRegex(/^[0-9]/)
     cacheName?: string;
 
-    constructor(name: string, uri: string, isArchive?: boolean, discardedLeadingDirectories?: number, cacheName?: string) {
+    constructor(name: string, uri: Uri, isArchive?: boolean, discardedLeadingDirectories?: number, cacheName?: string) {
         if(discardedLeadingDirectories === undefined) {
             discardedLeadingDirectories = 0
         }
@@ -54,9 +54,18 @@ export class Template {
         this.cacheName = cacheName
     }
 
-    async fetch(targetDirectory: vscode.Uri): Promise<void> {
-        if(config.checkAndCleanTemplateInfo(this)) {
-            logger.info(`Using template "${this.name}"`)
+    static from(name: string, uri: string, isArchive?: boolean, discardedLeadingDirectories?: number, cacheName?: string): tools.Result<Template, string> {
+        const supportedURI = Uri.from(uri)
+
+        if(supportedURI.isOk()) {
+            return new tools.OkResult(new Template(name, supportedURI.unwrap(), isArchive, discardedLeadingDirectories, cacheName))
+        } else {
+            return new tools.ErrorResult(supportedURI.unwrap() as string)
+        }
+    }
+
+    async fetch(targetDirectory: string): Promise<void> {
+        logger.info(`Using template "${this.name}"`)
             logger.info(`Fetching from "${this.uri}"`)
             
             try {
@@ -77,19 +86,18 @@ export class Template {
                 logger.error(err.message)
                 logger.takeFocus()
             }
-        }
     }
 
+    
     /**
      * Determines if a template URI is a file, a directory or an archive.
      * This function does not guarantee the URI validity.
      * @param template 
      */
     async findUriType(): Promise<TemplateType> {
-        const uriProtocol = tools.getUriProtocol(this.uri)
-        const isFilesystemUri = uriProtocol == "file" || uriProtocol == "none"
+        const isFilesystemUri = this.uri.getProtocol() == "file" || this.uri.getProtocol() == "none"
         
-        if(isFilesystemUri && (await fs.promises.stat(this.uri)).isDirectory()) {
+        if(isFilesystemUri && (await fs.promises.stat(this.uri.value)).isDirectory()) {
             return TemplateType.DIRECTORY
         }
 

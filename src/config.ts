@@ -3,7 +3,7 @@ import * as fs from 'fs'
 
 import { Logger } from './logger'
 import { ErrorResult, OkResult, Result } from './tools'
-import { Template } from './Template'
+import { Template } from './domain/Template'
 
 let logger = new Logger('[Config]')
 
@@ -43,38 +43,6 @@ export function getTemplates(): { validTemplates: Map<string, Template>, invalid
         validTemplates: validTemplates,
         invalidTemplateErrors: invalidTemplateErrors
     }
-}
-
-/**
- * Checks validity of the different template parameters.
- * If some parameters are omitted, then default values are affected.
- * @param templateName
- * @param template 
- */
-export function checkAndCleanTemplateInfo(template: Template): boolean {
-    if(template.uri === undefined) {
-        logConfigError(template.name, 'uri', 'URI field is mandatory in order to fetch project template')
-        return false
-    }
-    if(template.uri.trim().length === 0) {
-        logConfigError(template.name, 'uri', 'An URI can not be empty')
-        return false
-    }
-
-    if(template.discardedLeadingDirectories === undefined) {
-        template.discardedLeadingDirectories = 0
-    } else {
-        if(template.discardedLeadingDirectories < 0) {
-            logConfigError(template.name, 'directoryDepth', 'The directory depth can not have a negative value')
-            return false
-        }
-    }
-
-    if(template.isArchive === undefined) {
-        template.isArchive = false
-    }
-
-    return true
 }
 
 /**

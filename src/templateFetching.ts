@@ -9,6 +9,7 @@ import { Logger } from './logger'
 import * as config from './config'
 import * as dialogs from './dialogs'
 import * as tools from './tools'
+import { Uri } from './domain/Uri'
 
 const logger = new Logger('[Fetcher]')
 
@@ -34,7 +35,7 @@ export default async function fetchCmd(target: vscode.Uri) {
     })
 
     if(template) {        
-        await template.fetch(target)
+        await template.fetch(target.fsPath)
         return
     }
 
@@ -62,12 +63,12 @@ export default async function fetchCmd(target: vscode.Uri) {
  * @param template 
  * @param targetDirectory Where the template must be copied to.
  */
-export function fetchFromDirectory(srcUri: string, discardedLeadingDirectories: number, targetDirectory: vscode.Uri) {
-    let [directoryPath, copyOnlyContent] = discardLeadingDirectories(srcUri, discardedLeadingDirectories)
+export function fetchFromDirectory(srcUri: Uri, discardedLeadingDirectories: number, targetDirectory: string) {
+    let [directoryPath, copyOnlyContent] = discardLeadingDirectories(srcUri.value, discardedLeadingDirectories)
 
     const targetDirectorySuffix = '/' + (copyOnlyContent ? '' : path.basename(directoryPath))
 
-    ncp(directoryPath, targetDirectory.fsPath + targetDirectorySuffix, errors => {
+    ncp(directoryPath, targetDirectory + targetDirectorySuffix, errors => {
         if(errors) {
             errors.forEach(err => {
                 if(err) {
@@ -118,10 +119,10 @@ function discardLeadingDirectories(directoryPath: string, maxDepth: number): [st
  * @param discardedLeadingDirectories If the file is an archive, how many leading directories must be discarded ? 
  * If the value is undefined, then the file will NOT be considered as an archive.
  */
-export function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archiveOptions?: {discardedLeadingDirectories: number}) {
-    const uriHasProtocol = tools.getUriProtocol(srcUri) != "none"
+export function fetchFromFile(srcUri: Uri, targetDirectory: string, archiveOptions?: {discardedLeadingDirectories: number}) {
+    const uriHasProtocol = srcUri.getProtocol() != "none"
 
-    getUri(uriHasProtocol ? srcUri : `file:///${srcUri}`, (err, res) => {
+    getUri(uriHasProtocol ? srcUri.value : `file:///${srcUri.value}`, (err, res) => {
         if(err) {
             logger.error(err.message)
             return
@@ -138,7 +139,7 @@ export function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archi
             if(archiveOptions) {
                 extractArchive(buffer, archiveOptions.discardedLeadingDirectories, targetDirectory)
             } else {
-                fs.writeFile(targetDirectory.fsPath + '/' + path.basename(srcUri), buffer, () => {
+                fs.writeFile(targetDirectory + '/' + path.basename(srcUri.value), buffer, () => {
                     logger.info('Done')
                 })
             }
@@ -146,10 +147,10 @@ export function fetchFromFile(srcUri: string, targetDirectory: vscode.Uri, archi
     })
 }
 
-async function extractArchive(buffer: Buffer, discardedLeadingDirectories: number, targetDirecotry: vscode.Uri) {
+async function extractArchive(buffer: Buffer, discardedLeadingDirectories: number, targetDirecotry: string) {
     logger.info('Extracting files...')
 
-    const files = await decompress(buffer, targetDirecotry.fsPath, {
+    const files = await decompress(buffer, targetDirecotry, {
      	strip: discardedLeadingDirectories
     })
 

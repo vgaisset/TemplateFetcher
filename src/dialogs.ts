@@ -2,8 +2,9 @@ import * as vscode from 'vscode'
 import * as config from './config'
 import * as tools from './tools'
 import { DEFAULT_DISCARDED_LEADING_DIRECTORIES, TemplateType } from './templateCreation'
-import { Template } from './Template'
+import { Template } from './domain/Template'
 import { newTemplateCache } from './templateCaching'
+import { Uri } from './domain/Uri'
 
 interface SelectTemplateDialogOptions {
     placeHolder?: string
@@ -56,9 +57,9 @@ export async function newTemplate(): Promise<Template | undefined> {
         return undefined
     }
 
-    let newTemplate =  new Template(name, uri, templateType === TemplateType.ARCHIVE, discardedLeadingDirectories)
+    let newTemplate =  new Template(name, Uri.from(uri).unwrap() as Uri, templateType === TemplateType.ARCHIVE, discardedLeadingDirectories)
 
-    if(tools.getUriProtocol(uri) !== "none") {
+    if(newTemplate.uri.getProtocol() !== "none") {
         const createCache = await vscode.window.showQuickPick(['Yes', 'No'], {
             placeHolder: 'Your template seems to rely on a network connection. Do you want to create a cache for it ?'
         })
@@ -148,7 +149,7 @@ export async function askURI(templateType: TemplateType): Promise<string | undef
     
             if(uri && uri.length === 0){ 
                 vscode.window.showErrorMessage('An URI can not be empty')
-            } else if(uri && tools.getUriProtocol(uri) === 'unsupported') {
+            } else if(uri && Uri.findProtocolOf(uri) === 'unsupported') {
                 vscode.window.showErrorMessage('The used protocol is not supported (file, ftp, http and https are supported)')
             } else {
                 return uri

@@ -4,7 +4,7 @@ import * as vscode from 'vscode'
 import * as config from './config'
 import * as tools from './tools'
 import * as dialogs from './dialogs'
-import { Template } from './Template'
+import { Template } from './domain/Template'
 
 export async function setCacheDirectoryCmd(): Promise<string | undefined> {
     const path = await dialogs.askCachePath()
