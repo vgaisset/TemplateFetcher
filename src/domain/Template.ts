@@ -6,7 +6,7 @@ import { Logger } from '../logger'
 import * as tools from '../tools'
 import * as config from '../config'
 import * as dialogs from '../dialogs'
-import { Ensures, MatchRegex, NotEmpty, NotNegative } from '../checkDecorators'
+import { Requires as Requires, MatchRegex, NotEmpty, NotNegative } from '../checkDecorators'
 import { Uri } from './Uri'
 
 let logger = new Logger('[Template]')
@@ -35,7 +35,7 @@ export class Template {
     /**
      * Name of the template cache folder.
      */
-    @Ensures<string | undefined>('Must be 21 characters long', v => v === undefined || v.length == 21)
+    @Requires<string | undefined>('Must be 21 characters long', v => v === undefined || v.length == 21)
     @MatchRegex(/^[0-9]/)
     cacheName?: string;
 
@@ -52,16 +52,6 @@ export class Template {
         this.discardedLeadingDirectories = discardedLeadingDirectories
         this.isArchive = isArchive
         this.cacheName = cacheName
-    }
-
-    static from(name: string, uri: string, isArchive?: boolean, discardedLeadingDirectories?: number, cacheName?: string): tools.Result<Template, string> {
-        const supportedURI = Uri.from(uri)
-
-        if(supportedURI.isOk()) {
-            return new tools.OkResult(new Template(name, supportedURI.unwrap(), isArchive, discardedLeadingDirectories, cacheName))
-        } else {
-            return new tools.ErrorResult(supportedURI.unwrap() as string)
-        }
     }
 
     async fetch(targetDirectory: string): Promise<void> {

@@ -63,6 +63,20 @@ export async function tryToGetCachePath(): Promise<string | undefined> {
 
     return undefined
 }
+
+type AvailableTypes = 'bigint' |  'boolean' | 'number' | 'object' | 'string' | 'undefined'
+export function assertPropertyValidity(obj: any, objectName: string, possibleType: AvailableTypes = "undefined", ...otherPossibleTypes: AvailableTypes[]): any {
+    const actualType = typeof(obj)
+    
+    otherPossibleTypes.unshift(possibleType)
+    for(const possibleType of otherPossibleTypes) {
+        if(actualType === possibleType) 
+            return obj
+    }
+
+    throw new Error(`The property '${objectName}' is expected to be one of the following types: ${JSON.stringify(otherPossibleTypes)} (actual type: ${actualType})`)
+}
+
 export interface Result<TYPE, ERROR> {
     isOk(): this is OkResult<TYPE, ERROR>
     isError(): this is ErrorResult<TYPE, ERROR>

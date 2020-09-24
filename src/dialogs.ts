@@ -57,25 +57,31 @@ export async function newTemplate(): Promise<Template | undefined> {
         return undefined
     }
 
-    let newTemplate =  new Template(name, Uri.from(uri).unwrap() as Uri, templateType === TemplateType.ARCHIVE, discardedLeadingDirectories)
-
-    if(newTemplate.uri.getProtocol() !== "none") {
-        const createCache = await vscode.window.showQuickPick(['Yes', 'No'], {
-            placeHolder: 'Your template seems to rely on a network connection. Do you want to create a cache for it ?'
-        })
-        if(createCache === 'Yes') {
-            const result = await newTemplate.newCache()
-            if(result.isError()) {
-                if(result.unwrap()) {
-                    vscode.window.showErrorMessage(`Failed to create cache for your '${newTemplate.name}' template: ${result.unwrap()}`)
-                } else {
-                    return undefined
+    try {
+        let newTemplate =  new Template(name, new Uri(uri), templateType === TemplateType.ARCHIVE, discardedLeadingDirectories)
+    
+        if(newTemplate.uri.getProtocol() !== "none") {
+            const createCache = await vscode.window.showQuickPick(['Yes', 'No'], {
+                placeHolder: 'Your template seems to rely on a network connection. Do you want to create a cache for it ?'
+            })
+            if(createCache === 'Yes') {
+                const result = await newTemplate.newCache()
+                if(result.isError()) {
+                    if(result.unwrap()) {
+                        vscode.window.showErrorMessage(`Failed to create cache for your '${newTemplate.name}' template: ${result.unwrap()}`)
+                    } else {
+                        return undefined
+                    }
                 }
             }
         }
+    
+        return newTemplate
+    } catch(err) {
+        vscode.window.showErrorMessage(`An error happenend while creating your template: ${err}`)
     }
 
-    return newTemplate
+    return undefined
 } 
 
 export async function askTemplateName(): Promise<string | undefined> {

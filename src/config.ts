@@ -1,11 +1,9 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 
-import { Logger } from './logger'
-import { ErrorResult, OkResult, Result } from './tools'
+import { assertPropertyValidity, ErrorResult, OkResult, Result } from './tools'
 import { Template } from './domain/Template'
-
-let logger = new Logger('[Config]')
+import { Uri } from './domain/Uri'
 
 const templateFetcherID = 'templatefetcher'
 const templatesID = 'templates'
@@ -28,9 +26,11 @@ export function getTemplates(): { validTemplates: Map<string, Template>, invalid
         const configTemplate = templatesObj[templateName] 
         try {
             const template = new Template(
-                templateName, configTemplate.uri, 
-                configTemplate.isArchive, configTemplate.discardedLeadingDirectories, 
-                configTemplate.cacheName
+                templateName, 
+                new Uri(assertPropertyValidity(configTemplate.uri, 'uri', "string")), 
+                assertPropertyValidity(configTemplate.isArchive, 'isArchive', "undefined", "boolean"), 
+                assertPropertyValidity(configTemplate.discardedLeadingDirectories, 'discardedLeadingDirectories', "undefined", "number"), 
+                assertPropertyValidity(configTemplate.cacheName, 'cacheName', "undefined", "string")
             )
     
             validTemplates.set(templateName, template)
@@ -54,7 +54,7 @@ export async function createOrUpdateTemplate(template: Template) {
     let templates = wsConfig.get(templatesID) as any
 
     templates[template.name] = {
-        uri: template.uri,
+        uri: template.uri.value,
         discardedLeadingDirectories: template.discardedLeadingDirectories,
         isArchive: template.isArchive,
         cacheName: template.cacheName,
@@ -89,6 +89,7 @@ export enum CachePathErrors {
 export async function getCachePath(): Promise<Result<string, CachePathErrors>> {
     let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
     let cachePath = wsConfig.get(cachePathID) as string
+    assertPropertyValidity(cachePath, 'cachePath', "undefined", "string")
 
     if(cachePath) {
         try {
@@ -108,8 +109,4 @@ export async function getCachePath(): Promise<Result<string, CachePathErrors>> {
 export async function setCachePath(newCachePath: string) {
     let wsConfig = vscode.workspace.getConfiguration(templateFetcherID)
     await wsConfig.update(cachePathID, newCachePath, storeCachePathGlobally)
-}
-
-function logConfigError(itemName: string, itemFieldName: string, reason: string) {
-    logger.error(`On template "${itemName}":"${itemFieldName}" : ${reason}`)
 }

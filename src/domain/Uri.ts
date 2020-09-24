@@ -1,4 +1,5 @@
-import { Ensures, NotEmpty } from "../checkDecorators"
+import { hasUncaughtExceptionCaptureCallback } from "process"
+import { NotEmpty } from "../checkDecorators"
 import { ErrorResult, OkResult, Result } from "../tools"
 
 const useFileProtocolRegex = /^file:\/\/.*/
@@ -13,27 +14,22 @@ export class Uri {
     value: string
     private protocol: UriProtocol
     
-    private constructor(value: string, protocol: UriProtocol) {
-        this.value = value
-        this.protocol = protocol
-    }
-
-    static from(uri: string): Result<Uri, string> {
-        if(uri.trim().length == 0) {
-            return new ErrorResult('An URI can not be empty')
-        }
-
+    constructor(uri: string) {
+        this.value = uri
+        
         const protocol = Uri.findProtocolOf(uri)
 
-        if(protocol === "unsupported") {
-            return new ErrorResult(`The given URI uses a unsupported protocol (accepted: file://, http(s)://, ftp://)`)
-        }
-
-        return new OkResult(new Uri(uri, protocol))
+        if(protocol === "unsupported") 
+            throw new Error(`The given URI uses a unsupported protocol (accepted: file://, http(s)://, ftp://)`)
+        this.protocol = protocol
     }
 
     getProtocol(): UriProtocol {
         return this.protocol
+    }
+
+    toString(): string {
+        return this.value
     }
 
     /**
