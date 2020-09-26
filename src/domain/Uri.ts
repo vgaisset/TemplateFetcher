@@ -1,3 +1,4 @@
+import * as fs from "fs"
 import { hasUncaughtExceptionCaptureCallback } from "process"
 import { NotEmpty } from "../checkDecorators"
 import { ErrorResult, OkResult, Result } from "../tools"
@@ -26,6 +27,15 @@ export class Uri {
 
     getProtocol(): UriProtocol {
         return this.protocol
+    }
+
+    async isDirectory(): Promise<boolean> {
+        try {
+            const stats = await fs.promises.stat(this.value)
+            return stats.isDirectory()
+        } catch(err) {
+            return false
+        }
     }
 
     toString(): string {

@@ -1,17 +1,13 @@
 import * as vscode from 'vscode'
-import * as fs from 'fs'
-import * as getUri from 'get-uri'
-import * as decompress from 'decompress'
-import * as path from 'path'
-import * as ncp from 'ncp'
 
-import { Logger } from './logger'
+import { VscodeLoggerService } from './services/VscodeLoggerService'
 import * as config from './config'
 import * as dialogs from './dialogs'
-import * as tools from './tools'
-import { Uri } from './domain/Uri'
+import { VscodeFetchService } from './services/VscodeFetchService'
+import { fstat } from 'fs'
 
-const logger = new Logger('[Fetcher]')
+const logger = new VscodeLoggerService('[Fetcher]')
+const fetchService = new VscodeFetchService(logger)
 
 /**
  * Fetch command.
@@ -30,17 +26,22 @@ export default async function fetchCmd(target: vscode.Uri) {
         logger.warning(`No target directory is specified, going to use '${target.fsPath}' instead`)
     }
 
+    if(await checkForInvalidTemplates()) 
+        return
+    
     const template = await dialogs.selectTemplate({
         placeHolder: 'Select a template to fetch'
     })
 
     if(template) {        
-        await template.fetch(target.fsPath)
+        logger.flush()
+        await fetchService.fetch(template, target.fsPath)
         return
     }
+}
 
+async function checkForInvalidTemplates(): Promise<boolean> {
     const selection = config.getTemplates()
-    if(selection.invalidTemplateErrors.length != 0)
     if(selection.validTemplates.size === 0) {
         let value: string | undefined
         if(selection.invalidTemplateErrors.length != 0) {
@@ -54,110 +55,7 @@ export default async function fetchCmd(target: vscode.Uri) {
         } else if(value == 'Edit templates') {
             vscode.commands.executeCommand('workbench.action.openSettings', 'templatefetcher.templates')
         }
-        return
+        return true
     }
+    return false
 }
-
-/**
- * Fetches from a filesystem directory.
- * @param template 
- * @param targetDirectory Where the template must be copied to.
- */
-export function fetchFromDirectory(srcUri: Uri, discardedLeadingDirectories: number, targetDirectory: string) {
-    let [directoryPath, copyOnlyContent] = discardLeadingDirectories(srcUri.value, discardedLeadingDirectories)
-
-    const targetDirectorySuffix = '/' + (copyOnlyContent ? '' : path.basename(directoryPath))
-
-    ncp(directoryPath, targetDirectory + targetDirectorySuffix, errors => {
-        if(errors) {
-            errors.forEach(err => {
-                if(err) {
-                    logger.error(`When copying directory located at ${directoryPath}/ : ${err}`)
-                }
-            })
-        } else {
-            logger.info('Done')
-        }
-    })
-}
-
-/**
- * Given a base directory path and a maximum lookup depth, it tries to get the longest
- * directory path by discarding leading directories.
- * @param directoryPath 
- * @param maxDepth 
- * @returns The longest path found and a boolean specifying if only the directory content must be copied.
- */
-function discardLeadingDirectories(directoryPath: string, maxDepth: number): [string, boolean] {
-    let remainingDepth = maxDepth
-
-    for(let i = 0; i < maxDepth; i++) {
-        const dir = fs.opendirSync(directoryPath)
-        
-        const entry = dir.readSync()
-        const hasAnotherEntry = dir.readSync() != null
-
-        if(hasAnotherEntry || !entry.isDirectory()) {
-            // We stop eliminating leading directories
-            break;
-        }
-        
-        directoryPath += '/' + entry.name
-        remainingDepth--
-    }
-
-    return [
-        directoryPath,
-        remainingDepth != 0
-    ]
-}
-
-/**
- * Fetches from a filesystem file or from an http URL.
- * @param template 
- * @param targetDirectory 
- * @param discardedLeadingDirectories If the file is an archive, how many leading directories must be discarded ? 
- * If the value is undefined, then the file will NOT be considered as an archive.
- */
-export function fetchFromFile(srcUri: Uri, targetDirectory: string, archiveOptions?: {discardedLeadingDirectories: number}) {
-    const uriHasProtocol = srcUri.getProtocol() != "none"
-
-    getUri(uriHasProtocol ? srcUri.value : `file:///${srcUri.value}`, (err, res) => {
-        if(err) {
-            logger.error(err.message)
-            return
-        } 
-        
-        let chunks: any[] = []
-
-        res?.on('data', (chunk: any) => {
-            chunks.push(chunk)
-        })
-        res?.on('end', () => {
-            const buffer = Buffer.concat(chunks)
-            
-            if(archiveOptions) {
-                extractArchive(buffer, archiveOptions.discardedLeadingDirectories, targetDirectory)
-            } else {
-                fs.writeFile(targetDirectory + '/' + path.basename(srcUri.value), buffer, () => {
-                    logger.info('Done')
-                })
-            }
-        })
-    })
-}
-
-async function extractArchive(buffer: Buffer, discardedLeadingDirectories: number, targetDirecotry: string) {
-    logger.info('Extracting files...')
-
-    const files = await decompress(buffer, targetDirecotry, {
-     	strip: discardedLeadingDirectories
-    })
-
-    logger.info(`${files.length} files have been extracted`)
-    if(files.length == 0) {
-        logger.warning('There is currently no error detection for archive extraction. Therefore, the extraction may have failed. At the moment, only .zip should work')
-    }
-    logger.info('Done')
-}
-

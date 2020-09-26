@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 
-import * as logger from './logger'
+import * as loggerService from './services/VscodeLoggerService'
 import fetchTemplateCmd from './templateFetching'
 import newTemplateCmd from './templateCreation'
 import deleteTemplateCmd from './templateDeletion'
 import * as cache from './templateCaching'
 
 export function activate(context: vscode.ExtensionContext) {
-	logger.init()
+	loggerService.init()
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('templatefetcher.fetch', fetchTemplateCmd)

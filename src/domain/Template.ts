@@ -1,15 +1,8 @@
-import * as vscode from 'vscode'
 import * as fs from 'fs'
 
-import { fetchFromDirectory, fetchFromFile } from '../templateFetching'
-import { Logger } from '../logger'
 import * as tools from '../tools'
-import * as config from '../config'
-import * as dialogs from '../dialogs'
 import { Requires as Requires, MatchRegex, NotEmpty, NotNegative } from '../checkDecorators'
 import { Uri } from './Uri'
-
-let logger = new Logger('[Template]')
 
 export class Template {
     /**
@@ -53,31 +46,6 @@ export class Template {
         this.isArchive = isArchive
         this.cacheName = cacheName
     }
-
-    async fetch(targetDirectory: string): Promise<void> {
-        logger.info(`Using template "${this.name}"`)
-            logger.info(`Fetching from "${this.uri}"`)
-            
-            try {
-                const templateType = await this.findUriType()
-    
-                if(templateType == TemplateType.DIRECTORY || templateType == TemplateType.ARCHIVE) {
-                    this.discardedLeadingDirectories = await dialogs.confirmDirectoryDepth(this.discardedLeadingDirectories || 0)
-                    logger.takeFocus()
-                }
-                if(templateType == TemplateType.DIRECTORY) {
-                    fetchFromDirectory(this.uri, this.discardedLeadingDirectories || 0, targetDirectory)
-                } else {
-                    fetchFromFile(this.uri, targetDirectory, this.isArchive ? {
-                        discardedLeadingDirectories: this.discardedLeadingDirectories || 0
-                    } : undefined)
-                }
-            } catch(err) {
-                logger.error(err.message)
-                logger.takeFocus()
-            }
-    }
-
     
     /**
      * Determines if a template URI is a file, a directory or an archive.
